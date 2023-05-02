@@ -440,21 +440,33 @@ M.load = function(name, opts)
     vim.o.columns / data.global.width,
     (vim.o.lines - vim.o.cmdheight) / data.global.height,
   }
+
+  -- map from bufnrs to functions that run :edit on the buffer (not more than once)
+  local edit_fns = {}
+
   for _, buf in ipairs(data.buffers) do
     local bufnr = vim.fn.bufadd(buf.name)
     if buf.loaded then
       vim.fn.bufload(bufnr)
+
+      local loaded = false
+      local edit_fn = function()
+        if not loaded then
+          loaded = true
+          -- This triggers the autocmds that set filetype, syntax highlighting, and checks the swapfile
+          vim.cmd.edit({ mods = { emsg_silent = true } })
+        end
+      end
+
+      edit_fns[bufnr] = edit_fn
+
       vim.api.nvim_create_autocmd("BufEnter", {
         desc = "Resession: complete setup of restored buffer",
         callback = function(args)
           pcall(vim.api.nvim_win_set_cursor, 0, buf.last_pos)
-          -- We have to schedule :edit otherwise it recurses
-          vim.schedule(function()
-            if vim.api.nvim_get_current_buf() == args.buf then
-              -- This triggers the autocmds that set filetype, syntax highlighting, and checks the swapfile
-              vim.cmd.edit({ mods = { emsg_silent = true } })
-            end
-          end)
+          if vim.api.nvim_get_current_buf() == args.buf then
+            edit_fn()
+          end
         end,
         buffer = bufnr,
         once = true,
@@ -524,7 +536,7 @@ M.load = function(name, opts)
   dispatch("post_load", name, opts)
 
   -- In case the current buffer has a swapfile, make sure we trigger all the necessary autocmds
-  vim.cmd.edit({ mods = { emsg_silent = true } })
+  edit_fns[vim.api.nvim_get_current_buf()]()
 end
 
 ---Add a callback that runs at a specific time

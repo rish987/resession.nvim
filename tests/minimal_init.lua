@@ -19,3 +19,5 @@ vim.g.mapleader = " "
 vim.keymap.set('n', '<leader>sss', resession.save)
 vim.keymap.set('n', '<leader>ssl', resession.load)
 vim.keymap.set('n', '<leader>ssd', resession.delete)
+
+vim.o.swapfile = true
